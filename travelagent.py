@@ -109,9 +109,10 @@ travel_insurance = st.sidebar.checkbox("🛡️ Get Travel Insurance")
 currency_converter = st.sidebar.checkbox("💱 Currency Exchange Rates")
 
 # API keys (replace with your own)
+GOOGLE_API_KEY = "AIzaSyDP6K4SKU6cn1sdLkts7szrqJUWJekL9lU"
 SERPAPI_KEY = "8a9533909cc980bde8401c1f2293efa631a4c10eb6959d3bfb2be7898d96a60a"
-GOOGLE_API_KEY = "AIzaSyDP6K4SKU6cn1sdLkts7szrqJUWJekL9lUpython -m streamlit run travelagent.py"
 os.environ["GOOGLE_API_KEY"] = GOOGLE_API_KEY
+
 
 # ✈️ Function to fetch flights (no GoogleSearch needed)
 def fetch_flights(source, destination, departure_date, return_date):
@@ -162,7 +163,9 @@ planner = Agent(
         "Create a detailed itinerary with activities and estimated costs.",
         "Ensure convenience and enjoyment.",
     ],
-    model=Gemini(id="gemini-2.0-flash-exp"),
+    model = Gemini(id="gemini-1.5-pro")
+
+
 )
 
 hotel_restaurant_finder = Agent(
@@ -171,7 +174,8 @@ hotel_restaurant_finder = Agent(
         "Find highly rated hotels and restaurants near attractions.",
         "Prioritize based on user preferences, ratings, and availability.",
     ],
-    model=Gemini(id="gemini-2.0-flash-exp"),
+    model = Gemini(id="gemini-1.5-pro"),
+
     tools=[SerpApiTools(api_key=SERPAPI_KEY)],
 )
 
