@@ -2,13 +2,16 @@ import streamlit as st
 import json
 import os
 import requests
+from datetime import datetime
 from agno.agent import Agent
 from agno.tools.serpapi import SerpApiTools
 from agno.models.google import Gemini
-from datetime import datetime
 
-# Streamlit UI setup
+# =============================
+# 🌍 STREAMLIT PAGE SETUP
+# =============================
 st.set_page_config(page_title="🌍 AI Travel Planner", layout="wide")
+
 st.markdown(
     """
     <style>
@@ -33,11 +36,24 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Title and intro
 st.markdown('<h1 class="title">✈️ AI-Powered Travel Planner</h1>', unsafe_allow_html=True)
 st.markdown('<p class="subtitle">Plan your dream trip with AI! Get personalized recommendations for flights, hotels, and activities.</p>', unsafe_allow_html=True)
 
-# Inputs
+# =============================
+# 🔑 LOAD API KEYS SECURELY
+# =============================
+try:
+    GOOGLE_API_KEY = st.secrets["AIzaSyD5FT_6hPURqewU2ObH0PZTeKnMp1atOgM"]
+    SERPAPI_KEY = st.secrets["2f0c6eab45ba1d28b85063de65f0398abdb4c7e0c76dafd9a87c36af1de19666"]
+except Exception as e:
+    st.error("❌ Missing API keys! Please add them in Streamlit → Settings → Secrets.")
+    st.stop()
+
+os.environ["2f0c6eab45ba1d28b85063de65f0398abdb4c7e0c76dafd9a87c36af1de19666"] = GOOGLE_API_KEY
+
+# =============================
+# 🧳 USER INPUTS
+# =============================
 st.markdown("### 🌍 Where are you headed?")
 source = st.text_input("🛫 Departure City (IATA Code):", "BOM")
 destination = st.text_input("🛬 Destination (IATA Code):", "DEL")
@@ -67,15 +83,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Helper: format time
-def format_datetime(iso_string):
-    try:
-        dt = datetime.strptime(iso_string, "%Y-%m-%d %H:%M")
-        return dt.strftime("%b-%d, %Y | %I:%M %p")
-    except:
-        return "N/A"
-
-# User preferences
 activity_preferences = st.text_area(
     "🌍 What activities do you enjoy?",
     "Relaxing on the beach, exploring historical sites"
@@ -84,7 +91,9 @@ activity_preferences = st.text_area(
 departure_date = st.date_input("Departure Date")
 return_date = st.date_input("Return Date")
 
-# Sidebar
+# =============================
+# 🧭 SIDEBAR OPTIONS
+# =============================
 st.sidebar.title("🌎 Travel Assistant")
 st.sidebar.subheader("Personalize Your Trip")
 
@@ -108,14 +117,18 @@ visa_required = st.sidebar.checkbox("🛃 Check Visa Requirements")
 travel_insurance = st.sidebar.checkbox("🛡️ Get Travel Insurance")
 currency_converter = st.sidebar.checkbox("💱 Currency Exchange Rates")
 
-# API keys (replace with your own)
-GOOGLE_API_KEY = "AIzaSyDP6K4SKU6cn1sdLkts7szrqJUWJekL9lU"
-SERPAPI_KEY = "8a9533909cc980bde8401c1f2293efa631a4c10eb6959d3bfb2be7898d96a60a"
-os.environ["GOOGLE_API_KEY"] = GOOGLE_API_KEY
+# =============================
+# ✈️ HELPER FUNCTIONS
+# =============================
+def format_datetime(iso_string):
+    try:
+        dt = datetime.strptime(iso_string, "%Y-%m-%d %H:%M")
+        return dt.strftime("%b-%d, %Y | %I:%M %p")
+    except:
+        return "N/A"
 
-
-# ✈️ Function to fetch flights (no GoogleSearch needed)
 def fetch_flights(source, destination, departure_date, return_date):
+    """Fetch flight options using SerpAPI"""
     url = "https://serpapi.com/search"
     params = {
         "engine": "google_flights",
@@ -138,13 +151,14 @@ def fetch_flights(source, destination, departure_date, return_date):
         st.error(f"❌ Error fetching flights: {e}")
         return {}
 
-# Extract cheapest flights
 def extract_cheapest_flights(flight_data):
     best_flights = flight_data.get("best_flights", [])
     sorted_flights = sorted(best_flights, key=lambda x: x.get("price", float("inf")))[:3]
     return sorted_flights
 
-# AI Agents
+# =============================
+# 🧠 AI AGENTS (Gemini Models)
+# =============================
 researcher = Agent(
     name="Researcher",
     instructions=[
@@ -153,7 +167,7 @@ researcher = Agent(
         "Find popular attractions and must-visit places.",
         "Match activities with the user’s interests and travel style.",
     ],
-    model=Gemini(id="gemini-2.0-flash-exp"),
+    model=Gemini(model="gemini-1.5-flash"),
     tools=[SerpApiTools(api_key=SERPAPI_KEY)],
 )
 
@@ -163,9 +177,7 @@ planner = Agent(
         "Create a detailed itinerary with activities and estimated costs.",
         "Ensure convenience and enjoyment.",
     ],
-    model = Gemini(id="gemini-1.5-pro")
-
-
+    model=Gemini(model="gemini-1.5-pro")
 )
 
 hotel_restaurant_finder = Agent(
@@ -174,12 +186,13 @@ hotel_restaurant_finder = Agent(
         "Find highly rated hotels and restaurants near attractions.",
         "Prioritize based on user preferences, ratings, and availability.",
     ],
-    model = Gemini(id="gemini-1.5-pro"),
-
+    model=Gemini(model="gemini-1.5-pro"),
     tools=[SerpApiTools(api_key=SERPAPI_KEY)],
 )
 
-# 🚀 Generate Travel Plan
+# =============================
+# 🚀 GENERATE TRAVEL PLAN
+# =============================
 if st.button("🚀 Generate Travel Plan"):
     with st.spinner("✈️ Fetching best flight options..."):
         flight_data = fetch_flights(source, destination, departure_date, return_date)
@@ -191,14 +204,22 @@ if st.button("🚀 Generate Travel Plan"):
             f"User enjoys: {activity_preferences}. Budget: {budget}. Flight Class: {flight_class}. "
             f"Hotel Rating: {hotel_rating}."
         )
-        research_results = researcher.run(research_prompt, stream=False)
+        try:
+            research_results = researcher.run(research_prompt, stream=False)
+        except Exception as e:
+            st.error(f"❌ Researcher error: {e}")
+            st.stop()
 
     with st.spinner("🏨 Searching for hotels & restaurants..."):
         hotel_restaurant_prompt = (
             f"Find the best hotels and restaurants near attractions in {destination}. "
             f"Budget: {budget}. Hotel Rating: {hotel_rating}. Activities: {activity_preferences}."
         )
-        hotel_restaurant_results = hotel_restaurant_finder.run(hotel_restaurant_prompt, stream=False)
+        try:
+            hotel_restaurant_results = hotel_restaurant_finder.run(hotel_restaurant_prompt, stream=False)
+        except Exception as e:
+            st.error(f"❌ Hotel Finder error: {e}")
+            st.stop()
 
     with st.spinner("🗺️ Creating your personalized itinerary..."):
         planning_prompt = (
@@ -206,9 +227,15 @@ if st.button("🚀 Generate Travel Plan"):
             f"Activities: {activity_preferences}. Budget: {budget}. Flight Class: {flight_class}. "
             f"Research: {research_results.content}. Hotels & Restaurants: {hotel_restaurant_results.content}."
         )
-        itinerary = planner.run(planning_prompt, stream=False)
+        try:
+            itinerary = planner.run(planning_prompt, stream=False)
+        except Exception as e:
+            st.error(f"❌ Planner error: {e}")
+            st.stop()
 
-    # ✈️ Show flights
+    # =============================
+    # ✈️ SHOW RESULTS
+    # =============================
     st.subheader("✈️ Cheapest Flight Options")
     if cheapest_flights:
         cols = st.columns(len(cheapest_flights))
